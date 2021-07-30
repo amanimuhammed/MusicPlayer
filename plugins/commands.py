@@ -26,6 +26,9 @@ from utils import USERNAME, FFMPEG_PROCESSES, mp
 from config import Config
 import os
 import sys
+import subprocess
+import asyncio
+from signal import SIGINT
 U=USERNAME
 CHAT=Config.CHAT
 msg=Config.msg
@@ -60,6 +63,7 @@ You can also use /dplay <song name> to play a song from Deezer.</b>
 **/clean** Remove unused RAW PCM files.
 **/pause** Pause playing.
 **/resume** Resume playing.
+**/volume** Change volume(0-200).
 **/mute**  Mute in VC.
 **/unmute**  Unmute in VC.
 **/restart** Restarts the Bot.
@@ -86,7 +90,7 @@ async def start(client, message):
     reply_markup = InlineKeyboardMarkup(buttons)
     m=await message.reply(HOME_TEXT.format(message.from_user.first_name, message.from_user.id), reply_markup=reply_markup)
     await mp.delete(m)
-    await message.delete()
+    await mp.delete(message)
 
 
 
@@ -109,13 +113,20 @@ async def show_help(client, message):
         HELP,
         reply_markup=reply_markup
         )
-    await message.delete()
+    await mp.delete(message)
 @Client.on_message(filters.command(["restart", f"restart@{U}"]) & filters.user(Config.ADMINS) & (filters.chat(CHAT) | filters.private))
 async def restart(client, message):
     await message.reply_text("🔄 Restarting...")
-    await message.delete()
+    await mp.delete(message)
     process = FFMPEG_PROCESSES.get(CHAT)
     if process:
-        process.send_signal(signal.SIGTERM) 
+        try:
+            process.send_signal(SIGINT)
+        except subprocess.TimeoutExpired:
+            process.kill()
+        except Exception as e:
+            print(e)
+            pass
+        FFMPEG_PROCESSES[CHAT] = ""
     os.execl(sys.executable, sys.executable, *sys.argv)
     
